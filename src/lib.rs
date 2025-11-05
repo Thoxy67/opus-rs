@@ -12,15 +12,38 @@
 //! the [libopus documentation](https://opus-codec.org/docs/opus_api-1.5/).
 #![warn(missing_docs)]
 
-extern crate audiopus_sys as ffi;
+mod opus_ffi;
+use opus_ffi as ffi;
 
-use std::convert::TryFrom;
-use std::ffi::CStr;
-use std::marker::PhantomData;
-use std::os::raw::c_int;
+use std::{
+	convert::TryFrom,
+	ffi::{CStr, c_int},
+	marker::PhantomData,
+};
 
 // ============================================================================
 // Constants
+const OPUS_OK: i32 = ffi::OPUS_OK as i32;
+const OPUS_APPLICATION_VOIP: i32 = ffi::OPUS_APPLICATION_VOIP as i32;
+const OPUS_APPLICATION_AUDIO: i32 = ffi::OPUS_APPLICATION_AUDIO as i32;
+const OPUS_APPLICATION_RESTRICTED_LOWDELAY: i32 = ffi::OPUS_APPLICATION_RESTRICTED_LOWDELAY as i32;
+const OPUS_BANDWIDTH_NARROWBAND: i32 = ffi::OPUS_BANDWIDTH_NARROWBAND as i32;
+const OPUS_BANDWIDTH_MEDIUMBAND: i32 = ffi::OPUS_BANDWIDTH_MEDIUMBAND as i32;
+const OPUS_BANDWIDTH_WIDEBAND: i32 = ffi::OPUS_BANDWIDTH_WIDEBAND as i32;
+const OPUS_BANDWIDTH_SUPERWIDEBAND: i32 = ffi::OPUS_BANDWIDTH_SUPERWIDEBAND as i32;
+const OPUS_BANDWIDTH_FULLBAND: i32 = ffi::OPUS_BANDWIDTH_FULLBAND as i32;
+const OPUS_SIGNAL_VOICE: i32 = ffi::OPUS_SIGNAL_VOICE as i32;
+const OPUS_SIGNAL_MUSIC: i32 = ffi::OPUS_SIGNAL_MUSIC as i32;
+const OPUS_FRAMESIZE_ARG: i32 = ffi::OPUS_FRAMESIZE_ARG as i32;
+const OPUS_FRAMESIZE_2_5_MS: i32 = ffi::OPUS_FRAMESIZE_2_5_MS as i32;
+const OPUS_FRAMESIZE_5_MS: i32 = ffi::OPUS_FRAMESIZE_5_MS as i32;
+const OPUS_FRAMESIZE_10_MS : i32 = ffi::OPUS_FRAMESIZE_10_MS as i32;
+const OPUS_FRAMESIZE_20_MS : i32 = ffi::OPUS_FRAMESIZE_20_MS as i32;
+const OPUS_FRAMESIZE_40_MS : i32 = ffi::OPUS_FRAMESIZE_40_MS as i32;
+const OPUS_FRAMESIZE_60_MS : i32 = ffi::OPUS_FRAMESIZE_60_MS as i32;
+const OPUS_FRAMESIZE_80_MS : i32 = ffi::OPUS_FRAMESIZE_80_MS as i32;
+const OPUS_FRAMESIZE_100_MS: i32 = ffi::OPUS_FRAMESIZE_100_MS as i32;
+const OPUS_FRAMESIZE_120_MS: i32 = ffi::OPUS_FRAMESIZE_120_MS as i32;
 
 /// The possible applications for the codec.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -28,20 +51,21 @@ use std::os::raw::c_int;
 pub enum Application {
 	/// Best for most VoIP/videoconference applications where listening quality
 	/// and intelligibility matter most.
-	Voip = ffi::OPUS_APPLICATION_VOIP,
+	Voip = OPUS_APPLICATION_VOIP,
 	/// Best for broadcast/high-fidelity application where the decoded audio
 	/// should be as close as possible to the input.
-	Audio = ffi::OPUS_APPLICATION_AUDIO,
+	Audio = OPUS_APPLICATION_AUDIO,
 	/// Only use when lowest-achievable latency is what matters most.
-	LowDelay = ffi::OPUS_APPLICATION_RESTRICTED_LOWDELAY,
+	LowDelay = OPUS_APPLICATION_RESTRICTED_LOWDELAY,
 }
 
 impl Application {
+	#[inline]
 	fn from_raw(raw: i32, what: &'static str) -> Result<Application> {
 		match raw {
-			ffi::OPUS_APPLICATION_VOIP => Ok(Application::Voip),
-			ffi::OPUS_APPLICATION_AUDIO => Ok(Application::Audio),
-			ffi::OPUS_APPLICATION_RESTRICTED_LOWDELAY => Ok(Application::LowDelay),
+			OPUS_APPLICATION_VOIP => Ok(Application::Voip),
+			OPUS_APPLICATION_AUDIO => Ok(Application::Audio),
+			OPUS_APPLICATION_RESTRICTED_LOWDELAY => Ok(Application::LowDelay),
 			_ => Err(Error::bad_arg(what))
 		}
 	}
@@ -49,6 +73,7 @@ impl Application {
 
 /// The available channel setings.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[repr(i32)]
 pub enum Channels {
 	/// One channel.
 	Mono = 1,
@@ -63,30 +88,32 @@ pub enum Bandwidth {
 	/// Auto/default setting.
 	Auto = ffi::OPUS_AUTO,
 	/// 4kHz bandpass.
-	Narrowband = ffi::OPUS_BANDWIDTH_NARROWBAND,
+	Narrowband = OPUS_BANDWIDTH_NARROWBAND,
 	/// 6kHz bandpass.
-	Mediumband = ffi::OPUS_BANDWIDTH_MEDIUMBAND,
+	Mediumband = OPUS_BANDWIDTH_MEDIUMBAND,
 	/// 8kHz bandpass.
-	Wideband = ffi::OPUS_BANDWIDTH_WIDEBAND,
+	Wideband = OPUS_BANDWIDTH_WIDEBAND,
 	/// 12kHz bandpass.
-	Superwideband = ffi::OPUS_BANDWIDTH_SUPERWIDEBAND,
+	Superwideband = OPUS_BANDWIDTH_SUPERWIDEBAND,
 	/// 20kHz bandpass.
-	Fullband = ffi::OPUS_BANDWIDTH_FULLBAND,
+	Fullband = OPUS_BANDWIDTH_FULLBAND,
 }
 
 impl Bandwidth {
+	#[inline]
 	fn from_int(value: i32) -> Option<Bandwidth> {
 		Some(match value {
 			ffi::OPUS_AUTO => Bandwidth::Auto,
-			ffi::OPUS_BANDWIDTH_NARROWBAND => Bandwidth::Narrowband,
-			ffi::OPUS_BANDWIDTH_MEDIUMBAND => Bandwidth::Mediumband,
-			ffi::OPUS_BANDWIDTH_WIDEBAND => Bandwidth::Wideband,
-			ffi::OPUS_BANDWIDTH_SUPERWIDEBAND => Bandwidth::Superwideband,
-			ffi::OPUS_BANDWIDTH_FULLBAND => Bandwidth::Fullband,
+			OPUS_BANDWIDTH_NARROWBAND => Bandwidth::Narrowband,
+			OPUS_BANDWIDTH_MEDIUMBAND => Bandwidth::Mediumband,
+			OPUS_BANDWIDTH_WIDEBAND => Bandwidth::Wideband,
+			OPUS_BANDWIDTH_SUPERWIDEBAND => Bandwidth::Superwideband,
+			OPUS_BANDWIDTH_FULLBAND => Bandwidth::Fullband,
 			_ => return None,
 		})
 	}
 
+	#[inline]
 	fn decode(value: i32, what: &'static str) -> Result<Bandwidth> {
 		match Bandwidth::from_int(value) {
 			Some(bandwidth) => Ok(bandwidth),
@@ -94,6 +121,7 @@ impl Bandwidth {
 		}
 	}
 
+	#[inline]
 	fn raw(self) -> i32 {
 		self as i32
 	}
@@ -128,6 +156,7 @@ pub enum ErrorCode {
 }
 
 impl ErrorCode {
+	#[inline]
 	fn from_int(value: c_int) -> ErrorCode {
 		use ErrorCode::*;
 		match value {
@@ -185,21 +214,23 @@ pub enum Signal {
 	/// Auto/default setting.
 	Auto = ffi::OPUS_AUTO,
 	/// Bias thresholds towards choosing LPC or Hybrid modes.
-	Voice = ffi::OPUS_SIGNAL_VOICE,
+	Voice = OPUS_SIGNAL_VOICE,
 	/// Bias thresholds towards choosing MDCT modes.
-	Music = ffi::OPUS_SIGNAL_MUSIC,
+	Music = OPUS_SIGNAL_MUSIC,
 }
 
 impl Signal {
+	#[inline]
 	fn from_raw(raw: i32, what: &'static str) -> Result<Signal> {
 		match raw {
 			ffi::OPUS_AUTO => Ok(Signal::Auto),
-			ffi::OPUS_SIGNAL_VOICE => Ok(Signal::Voice),
-			ffi::OPUS_SIGNAL_MUSIC => Ok(Signal::Music),
+			OPUS_SIGNAL_VOICE => Ok(Signal::Voice),
+			OPUS_SIGNAL_MUSIC => Ok(Signal::Music),
 			_ => Err(Error::bad_arg(what)),
 		}
 	}
 
+	#[inline]
 	fn raw(self) -> i32 {
 		self as i32
 	}
@@ -216,44 +247,46 @@ impl Default for Signal {
 #[repr(i32)]
 pub enum FrameSize {
 	/// Select frame size from the argument (default).
-	Arg = ffi::OPUS_FRAMESIZE_ARG,
+	Arg = OPUS_FRAMESIZE_ARG,
 	/// Use 2.5 ms frames.
-	Ms2_5 = ffi::OPUS_FRAMESIZE_2_5_MS,
+	Ms2_5 = OPUS_FRAMESIZE_2_5_MS,
 	/// Use 5 ms frames.
-	Ms5 = ffi::OPUS_FRAMESIZE_5_MS,
+	Ms5 = OPUS_FRAMESIZE_5_MS,
 	/// Use 10 ms frames.
-	Ms10 = ffi::OPUS_FRAMESIZE_10_MS,
+	Ms10 = OPUS_FRAMESIZE_10_MS,
 	/// Use 20 ms frames.
-	Ms20 = ffi::OPUS_FRAMESIZE_20_MS,
+	Ms20 = OPUS_FRAMESIZE_20_MS,
 	/// Use 40 ms frames.
-	Ms40 = ffi::OPUS_FRAMESIZE_40_MS,
+	Ms40 = OPUS_FRAMESIZE_40_MS,
 	/// Use 60 ms frames.
-	Ms60  = ffi::OPUS_FRAMESIZE_60_MS,
+	Ms60  = OPUS_FRAMESIZE_60_MS,
 	/// Use 80 ms frames.
-	Ms80  = ffi::OPUS_FRAMESIZE_80_MS,
+	Ms80  = OPUS_FRAMESIZE_80_MS,
 	/// Use 100 ms frames.
-	Ms100 = ffi::OPUS_FRAMESIZE_100_MS,
+	Ms100 = OPUS_FRAMESIZE_100_MS,
 	/// Use 120 ms frames.
-	Ms120 = ffi::OPUS_FRAMESIZE_120_MS,
+	Ms120 = OPUS_FRAMESIZE_120_MS,
 }
 
 impl FrameSize {
+	#[inline]
 	fn from_raw(raw: i32, what: &'static str) -> Result<FrameSize> {
 		match raw {
-			ffi::OPUS_FRAMESIZE_ARG => Ok(FrameSize::Arg),
-			ffi::OPUS_FRAMESIZE_2_5_MS => Ok(FrameSize::Ms2_5),
-			ffi::OPUS_FRAMESIZE_5_MS => Ok(FrameSize::Ms5),
-			ffi::OPUS_FRAMESIZE_10_MS => Ok(FrameSize::Ms10),
-			ffi::OPUS_FRAMESIZE_20_MS => Ok(FrameSize::Ms20),
-			ffi::OPUS_FRAMESIZE_40_MS => Ok(FrameSize::Ms40),
-			ffi::OPUS_FRAMESIZE_60_MS => Ok(FrameSize::Ms60),
-			ffi::OPUS_FRAMESIZE_80_MS => Ok(FrameSize::Ms80),
-			ffi::OPUS_FRAMESIZE_100_MS => Ok(FrameSize::Ms100),
-			ffi::OPUS_FRAMESIZE_120_MS => Ok(FrameSize::Ms120),
+			OPUS_FRAMESIZE_ARG => Ok(FrameSize::Arg),
+			OPUS_FRAMESIZE_2_5_MS => Ok(FrameSize::Ms2_5),
+			OPUS_FRAMESIZE_5_MS => Ok(FrameSize::Ms5),
+			OPUS_FRAMESIZE_10_MS => Ok(FrameSize::Ms10),
+			OPUS_FRAMESIZE_20_MS => Ok(FrameSize::Ms20),
+			OPUS_FRAMESIZE_40_MS => Ok(FrameSize::Ms40),
+			OPUS_FRAMESIZE_60_MS => Ok(FrameSize::Ms60),
+			OPUS_FRAMESIZE_80_MS => Ok(FrameSize::Ms80),
+			OPUS_FRAMESIZE_100_MS => Ok(FrameSize::Ms100),
+			OPUS_FRAMESIZE_120_MS => Ok(FrameSize::Ms120),
 			_ => Err(Error::bad_arg(what)),
 		}
 	}
 
+	#[inline]
 	fn raw(self) -> i32 {
 		self as i32
 	}
@@ -289,7 +322,7 @@ macro_rules! ffi {
 
 macro_rules! ctl {
 	($f:ident, $this:ident, $ctl:path $(, $rest:expr)*) => {
-		match unsafe { ffi::$f($this.ptr, $ctl $(, $rest)*) } {
+		match unsafe { ffi::$f($this.ptr, $ctl as std::ffi::c_int $(, $rest)*) } {
 			code if code < 0 => return Err(Error::from_code(
 				concat!(stringify!($f), "(", stringify!($ctl), ")"),
 				code,
@@ -394,8 +427,8 @@ impl Encoder {
 				&mut error,
 			)
 		};
-		if error != ffi::OPUS_OK || ptr.is_null() {
-			Err(Error::from_code("opus_encoder_create", error))
+		if error != OPUS_OK || ptr.is_null() {
+			Err(Error::from_code("opus_encoder_create", error as c_int))
 		} else {
 			Ok(Encoder { ptr, channels })
 		}
@@ -672,7 +705,26 @@ macro_rules! encoder_ctls {
 				Ok(value != 0)
 			}
 
-			// TODO(#5): OPUS_SET/GET_DRED_DURATION (since Opus 1.5)
+			/// Set the DRED duration in milliseconds (Opus 1.5+).
+			///
+			/// Configures the amount of redundancy data (DRED) to include in each packet
+			/// for improved packet loss concealment. The duration must be between 0 and 120 ms.
+			/// A value of 0 disables DRED.
+			///
+			/// # Arguments
+			/// * `duration_ms` - DRED duration in milliseconds (0-120)
+			pub fn set_dred_duration(&mut self, duration_ms: i32) -> Result<()> {
+				ctl!($fn, self, ffi::OPUS_SET_DRED_DURATION_REQUEST, duration_ms);
+				Ok(())
+			}
+
+			/// Get the encoder's configured DRED duration in milliseconds (Opus 1.5+).
+			pub fn get_dred_duration(&mut self) -> Result<i32> {
+				let mut value: i32 = 0;
+				ctl!($fn, self, ffi::OPUS_GET_DRED_DURATION_REQUEST, &mut value);
+				Ok(value)
+			}
+
 			// TODO(#5): OPUS_SET_DNN_BLOB (since Opus 1.5)
 		}
 	};
@@ -706,8 +758,8 @@ impl Decoder {
 		let mut error = 0;
 		let ptr =
 			unsafe { ffi::opus_decoder_create(sample_rate as i32, channels as c_int, &mut error) };
-		if error != ffi::OPUS_OK || ptr.is_null() {
-			Err(Error::from_code("opus_decoder_create", error))
+		if error != OPUS_OK || ptr.is_null() {
+			Err(Error::from_code("opus_decoder_create", error as c_int))
 		} else {
 			Ok(Decoder { ptr, channels })
 		}
@@ -817,6 +869,180 @@ generic_ctls!(Decoder, opus_decoder_ctl);
 decoder_ctls!(Decoder, opus_decoder_ctl);
 
 // ============================================================================
+// DRED (Deep REDundancy) - Opus 1.5
+
+/// An Opus DRED (Deep REDundancy) decoder state.
+///
+/// DRED provides additional redundancy for improved packet loss concealment.
+/// See [Opus docs](https://opus-codec.org/docs/opus_api-1.5/group__opus__decoder.html).
+#[derive(Debug)]
+pub struct DREDDecoder {
+	ptr: *mut ffi::OpusDREDDecoder,
+}
+
+impl Drop for DREDDecoder {
+	fn drop(&mut self) {
+		unsafe { ffi::opus_dred_decoder_destroy(self.ptr) }
+	}
+}
+
+// See `unsafe impl Send for Encoder`.
+unsafe impl Send for DREDDecoder {}
+
+impl DREDDecoder {
+	/// Create and initialize a DRED decoder.
+	pub fn new() -> Result<DREDDecoder> {
+		let mut error = 0;
+		let ptr = unsafe { ffi::opus_dred_decoder_create(&mut error) };
+		if error != OPUS_OK || ptr.is_null() {
+			Err(Error::from_code("opus_dred_decoder_create", error as c_int))
+		} else {
+			Ok(DREDDecoder { ptr })
+		}
+	}
+
+	/// Get the size of the DREDDecoder structure in bytes.
+	pub fn get_size() -> i32 {
+		unsafe { ffi::opus_dred_decoder_get_size() }
+	}
+}
+
+/// An Opus DRED (Deep REDundancy) state.
+///
+/// This structure holds the decoded DRED information that can be used
+/// for packet loss concealment.
+#[derive(Debug)]
+pub struct DRED {
+	ptr: *mut ffi::OpusDRED,
+}
+
+impl Drop for DRED {
+	fn drop(&mut self) {
+		unsafe { ffi::opus_dred_free(self.ptr) }
+	}
+}
+
+// See `unsafe impl Send for Encoder`.
+unsafe impl Send for DRED {}
+
+impl DRED {
+	/// Allocate and initialize a DRED state.
+	pub fn new() -> Result<DRED> {
+		let mut error = 0;
+		let ptr = unsafe { ffi::opus_dred_alloc(&mut error) };
+		if error != OPUS_OK || ptr.is_null() {
+			Err(Error::from_code("opus_dred_alloc", error as c_int))
+		} else {
+			Ok(DRED { ptr })
+		}
+	}
+
+	/// Get the size of the DRED structure in bytes.
+	pub fn get_size() -> i32 {
+		unsafe { ffi::opus_dred_get_size() }
+	}
+
+	/// Parse and decode an Opus DRED packet.
+	///
+	/// # Arguments
+	/// * `dred_decoder` - The DRED decoder state
+	/// * `data` - The input payload containing DRED data
+	/// * `max_dred_samples` - Maximum number of DRED samples that may be needed
+	/// * `sampling_rate` - Sampling rate used for max_dred_samples (need not match decoder's actual rate)
+	/// * `defer_processing` - If true, defer CPU-intensive processing until `process()` is called
+	///
+	/// # Returns
+	/// A tuple of (dred_offset, dred_end) where:
+	/// * `dred_offset` - Offset (positive) of the first decoded DRED samples, or 0 if no DRED present
+	/// * `dred_end` - Number of non-encoded (silence) samples between DRED timestamp and last DRED sample
+	pub fn parse(
+		&mut self,
+		dred_decoder: &mut DREDDecoder,
+		data: &[u8],
+		max_dred_samples: i32,
+		sampling_rate: i32,
+		defer_processing: bool,
+	) -> Result<(i32, i32)> {
+		let mut dred_end: c_int = 0;
+		let dred_offset = ffi!(
+			opus_dred_parse,
+			dred_decoder.ptr,
+			self.ptr,
+			data.as_ptr(),
+			len(data),
+			max_dred_samples,
+			sampling_rate,
+			&mut dred_end,
+			if defer_processing { 1 } else { 0 }
+		);
+		Ok((dred_offset, dred_end))
+	}
+
+	/// Finish decoding an Opus DRED packet.
+	///
+	/// This function only needs to be called if `parse()` was called with `defer_processing=true`.
+	///
+	/// # Arguments
+	/// * `dred_decoder` - The DRED decoder state
+	/// * `src` - Source DRED state to start processing from
+	///
+	/// # Returns
+	/// The processed DRED state (self is updated in place)
+	pub fn process(&mut self, dred_decoder: &mut DREDDecoder, src: &DRED) -> Result<()> {
+		ffi!(opus_dred_process, dred_decoder.ptr, src.ptr, self.ptr);
+		Ok(())
+	}
+}
+
+impl Decoder {
+	/// Decode DRED data to i16 PCM.
+	///
+	/// Use this function to decode DRED redundancy data for packet loss concealment.
+	///
+	/// # Arguments
+	/// * `dred` - The DRED state containing decoded redundancy data
+	/// * `dred_offset` - Offset returned from `DRED::parse()`
+	/// * `output` - Output buffer for decoded PCM samples (interleaved if stereo)
+	///
+	/// # Returns
+	/// Number of samples per channel decoded
+	pub fn decode_dred(&mut self, dred: &DRED, dred_offset: i32, output: &mut [i16]) -> Result<usize> {
+		let len = ffi!(
+			opus_decoder_dred_decode,
+			self.ptr,
+			dred.ptr,
+			dred_offset,
+			output.as_mut_ptr(),
+			len(output) / self.channels as c_int
+		);
+		Ok(len as usize)
+	}
+
+	/// Decode DRED data to f32 PCM.
+	///
+	/// Use this function to decode DRED redundancy data for packet loss concealment.
+	///
+	/// # Arguments
+	/// * `dred` - The DRED state containing decoded redundancy data
+	/// * `dred_offset` - Offset returned from `DRED::parse()`
+	/// * `output` - Output buffer for decoded PCM samples (interleaved if stereo)
+	///
+	/// # Returns
+	/// Number of samples per channel decoded
+	pub fn decode_dred_float(&mut self, dred: &DRED, dred_offset: i32, output: &mut [f32]) -> Result<usize> {
+		let len = ffi!(
+			opus_decoder_dred_decode_float,
+			self.ptr,
+			dred.ptr,
+			dred_offset,
+			output.as_mut_ptr(),
+			len(output) / self.channels as c_int
+		);
+		Ok(len as usize)
+	}
+}
+
+// ============================================================================
 // Packet Analysis
 
 /// Analyze raw Opus packets.
@@ -870,8 +1096,28 @@ pub mod packet {
 		Ok(samples as usize)
 	}
 
+	/// Check if an Opus packet has LBRR (Low Bitrate Redundancy).
+	///
+	/// LBRR is a form of forward error correction that allows the decoder
+	/// to partially recover from packet loss without DRED.
+	///
+	/// # Arguments
+	/// * `packet` - The Opus packet to check
+	///
+	/// # Returns
+	/// `true` if the packet contains LBRR data, `false` otherwise
+	pub fn has_lbrr(packet: &[u8]) -> bool {
+		if packet.is_empty() {
+			return false;
+		}
+		let result = unsafe {
+			ffi::opus_packet_has_lbrr(packet.as_ptr(), len(packet))
+		};
+		result != 0
+	}
+
 	/// Parse an Opus packet into one or more frames.
-	pub fn parse(packet: &[u8]) -> Result<Packet> {
+	pub fn parse(packet: &'_ [u8]) -> Result<Packet<'_>> {
 		let mut toc: u8 = 0;
 		let mut frames = [ptr::null(); 48];
 		let mut sizes = [0i16; 48];
@@ -1137,8 +1383,8 @@ impl MSEncoder {
 				&mut error,
 			)
 		};
-		if error != ffi::OPUS_OK || ptr.is_null() {
-			Err(Error::from_code("opus_multistream_encoder_create", error))
+		if error != OPUS_OK || ptr.is_null() {
+			Err(Error::from_code("opus_multistream_encoder_create", error as c_int))
 		} else {
 			Ok(MSEncoder { ptr, channels: len(mapping) })
 		}
@@ -1230,8 +1476,8 @@ impl MSDecoder {
 				&mut error,
 			)
 		};
-		if error != ffi::OPUS_OK || ptr.is_null() {
-			Err(Error::from_code("opus_multistream_decoder_create", error))
+		if error != OPUS_OK || ptr.is_null() {
+			Err(Error::from_code("opus_multistream_decoder_create", error as c_int))
 		} else {
 			Ok(MSDecoder { ptr, channels: len(mapping) })
 		}
@@ -1280,6 +1526,368 @@ generic_ctls!(MSDecoder, opus_multistream_decoder_ctl);
 decoder_ctls!(MSDecoder, opus_multistream_decoder_ctl);
 
 // ============================================================================
+// Opus Custom API (for non-standard frame sizes)
+
+/// An Opus Custom mode configuration.
+///
+/// The Custom API allows encoding/decoding with non-standard frame sizes.
+/// This is rarely needed for most applications.
+#[derive(Debug)]
+pub struct CustomMode {
+	ptr: *mut ffi::OpusCustomMode,
+}
+
+impl Drop for CustomMode {
+	fn drop(&mut self) {
+		unsafe { ffi::opus_custom_mode_destroy(self.ptr) }
+	}
+}
+
+unsafe impl Send for CustomMode {}
+
+impl CustomMode {
+	/// Create a new custom mode.
+	///
+	/// # Arguments
+	/// * `sample_rate` - Sampling rate (Hz)
+	/// * `frame_size` - Number of samples per channel in each frame
+	pub fn new(sample_rate: u32, frame_size: usize) -> Result<CustomMode> {
+		let mut error = 0;
+		let ptr = unsafe {
+			ffi::opus_custom_mode_create(
+				sample_rate as i32,
+				frame_size as c_int,
+				&mut error,
+			)
+		};
+		if error != OPUS_OK || ptr.is_null() {
+			Err(Error::from_code("opus_custom_mode_create", error as c_int))
+		} else {
+			Ok(CustomMode { ptr })
+		}
+	}
+}
+
+/// An Opus Custom encoder.
+#[derive(Debug)]
+pub struct CustomEncoder {
+	ptr: *mut ffi::OpusCustomEncoder,
+	channels: Channels,
+}
+
+impl Drop for CustomEncoder {
+	fn drop(&mut self) {
+		unsafe { ffi::opus_custom_encoder_destroy(self.ptr) }
+	}
+}
+
+unsafe impl Send for CustomEncoder {}
+
+impl CustomEncoder {
+	/// Create a new custom encoder.
+	pub fn new(mode: &CustomMode, channels: Channels) -> Result<CustomEncoder> {
+		let mut error = 0;
+		let ptr = unsafe {
+			ffi::opus_custom_encoder_create(
+				mode.ptr,
+				channels as c_int,
+				&mut error,
+			)
+		};
+		if error != OPUS_OK || ptr.is_null() {
+			Err(Error::from_code("opus_custom_encoder_create", error as c_int))
+		} else {
+			Ok(CustomEncoder { ptr, channels })
+		}
+	}
+
+	/// Encode a custom Opus frame.
+	pub fn encode(&mut self, input: &[i16], output: &mut [u8]) -> Result<usize> {
+		let len = ffi!(
+			opus_custom_encode,
+			self.ptr,
+			input.as_ptr(),
+			len(input) / self.channels as c_int,
+			output.as_mut_ptr(),
+			len(output)
+		);
+		Ok(len as usize)
+	}
+
+	/// Encode a custom Opus frame from floating point input.
+	pub fn encode_float(&mut self, input: &[f32], output: &mut [u8]) -> Result<usize> {
+		let len = ffi!(
+			opus_custom_encode_float,
+			self.ptr,
+			input.as_ptr(),
+			len(input) / self.channels as c_int,
+			output.as_mut_ptr(),
+			len(output)
+		);
+		Ok(len as usize)
+	}
+}
+
+generic_ctls!(CustomEncoder, opus_custom_encoder_ctl);
+encoder_ctls!(CustomEncoder, opus_custom_encoder_ctl);
+
+/// An Opus Custom decoder.
+#[derive(Debug)]
+pub struct CustomDecoder {
+	ptr: *mut ffi::OpusCustomDecoder,
+	channels: Channels,
+}
+
+impl Drop for CustomDecoder {
+	fn drop(&mut self) {
+		unsafe { ffi::opus_custom_decoder_destroy(self.ptr) }
+	}
+}
+
+unsafe impl Send for CustomDecoder {}
+
+impl CustomDecoder {
+	/// Create a new custom decoder.
+	pub fn new(mode: &CustomMode, channels: Channels) -> Result<CustomDecoder> {
+		let mut error = 0;
+		let ptr = unsafe {
+			ffi::opus_custom_decoder_create(
+				mode.ptr,
+				channels as c_int,
+				&mut error,
+			)
+		};
+		if error != OPUS_OK || ptr.is_null() {
+			Err(Error::from_code("opus_custom_decoder_create", error as c_int))
+		} else {
+			Ok(CustomDecoder { ptr, channels })
+		}
+	}
+
+	/// Decode a custom Opus frame.
+	pub fn decode(&mut self, input: &[u8], output: &mut [i16]) -> Result<usize> {
+		let ptr = match input.len() {
+			0 => std::ptr::null(),
+			_ => input.as_ptr(),
+		};
+		let len = ffi!(
+			opus_custom_decode,
+			self.ptr,
+			ptr,
+			len(input),
+			output.as_mut_ptr(),
+			len(output) / self.channels as c_int
+		);
+		Ok(len as usize)
+	}
+
+	/// Decode a custom Opus frame with floating point output.
+	pub fn decode_float(&mut self, input: &[u8], output: &mut [f32]) -> Result<usize> {
+		let ptr = match input.len() {
+			0 => std::ptr::null(),
+			_ => input.as_ptr(),
+		};
+		let len = ffi!(
+			opus_custom_decode_float,
+			self.ptr,
+			ptr,
+			len(input),
+			output.as_mut_ptr(),
+			len(output) / self.channels as c_int
+		);
+		Ok(len as usize)
+	}
+}
+
+generic_ctls!(CustomDecoder, opus_custom_decoder_ctl);
+decoder_ctls!(CustomDecoder, opus_custom_decoder_ctl);
+
+// ============================================================================
+// Opus Projection API (for Ambisonics)
+
+/// Mapping family for Ambisonics projection.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+#[repr(i32)]
+pub enum AmbisonicsMapping {
+	/// Ambisonics mapping family 2.
+	Family2 = 2,
+	/// Ambisonics mapping family 3.
+	Family3 = 3,
+}
+
+/// An Opus Projection encoder for Ambisonics.
+///
+/// Used for encoding 3D spatial audio (Ambisonics).
+#[derive(Debug)]
+pub struct ProjectionEncoder {
+	ptr: *mut ffi::OpusProjectionEncoder,
+	channels: c_int,
+}
+
+impl Drop for ProjectionEncoder {
+	fn drop(&mut self) {
+		unsafe { ffi::opus_projection_encoder_destroy(self.ptr) }
+	}
+}
+
+unsafe impl Send for ProjectionEncoder {}
+
+impl ProjectionEncoder {
+	/// Create and initialize an Ambisonics projection encoder.
+	///
+	/// # Arguments
+	/// * `sample_rate` - Sampling rate (Hz)
+	/// * `channels` - Number of channels (determined by Ambisonics order)
+	/// * `mapping_family` - Ambisonics mapping family (2 or 3)
+	/// * `application` - Coding mode
+	pub fn new_ambisonics(
+		sample_rate: u32,
+		channels: u8,
+		mapping_family: AmbisonicsMapping,
+		application: Application,
+	) -> Result<ProjectionEncoder> {
+		let mut error = 0;
+		let ptr = unsafe {
+			ffi::opus_projection_ambisonics_encoder_create(
+				sample_rate as i32,
+				channels as c_int,
+				mapping_family as c_int,
+				std::ptr::null_mut(),
+				std::ptr::null_mut(),
+				application as c_int,
+				&mut error,
+			)
+		};
+		if error != OPUS_OK || ptr.is_null() {
+			Err(Error::from_code("opus_projection_ambisonics_encoder_create", error as c_int))
+		} else {
+			Ok(ProjectionEncoder { ptr, channels: channels as c_int })
+		}
+	}
+
+	/// Encode a projection Opus frame.
+	pub fn encode(&mut self, input: &[i16], output: &mut [u8]) -> Result<usize> {
+		let len = ffi!(
+			opus_projection_encode,
+			self.ptr,
+			input.as_ptr(),
+			len(input) / self.channels,
+			output.as_mut_ptr(),
+			len(output)
+		);
+		Ok(len as usize)
+	}
+
+	/// Encode a projection Opus frame from floating point input.
+	pub fn encode_float(&mut self, input: &[f32], output: &mut [u8]) -> Result<usize> {
+		let len = ffi!(
+			opus_projection_encode_float,
+			self.ptr,
+			input.as_ptr(),
+			len(input) / self.channels,
+			output.as_mut_ptr(),
+			len(output)
+		);
+		Ok(len as usize)
+	}
+}
+
+generic_ctls!(ProjectionEncoder, opus_projection_encoder_ctl);
+encoder_ctls!(ProjectionEncoder, opus_projection_encoder_ctl);
+
+/// An Opus Projection decoder for Ambisonics.
+///
+/// Used for decoding 3D spatial audio (Ambisonics).
+#[derive(Debug)]
+pub struct ProjectionDecoder {
+	ptr: *mut ffi::OpusProjectionDecoder,
+	channels: c_int,
+}
+
+impl Drop for ProjectionDecoder {
+	fn drop(&mut self) {
+		unsafe { ffi::opus_projection_decoder_destroy(self.ptr) }
+	}
+}
+
+unsafe impl Send for ProjectionDecoder {}
+
+impl ProjectionDecoder {
+	/// Create and initialize a projection decoder.
+	///
+	/// # Arguments
+	/// * `sample_rate` - Sampling rate (Hz)
+	/// * `channels` - Number of channels
+	/// * `streams` - Number of streams
+	/// * `coupled_streams` - Number of coupled streams
+	/// * `demixing_matrix` - Demixing matrix for channel mapping
+	pub fn new(
+		sample_rate: u32,
+		channels: u8,
+		streams: u8,
+		coupled_streams: u8,
+		demixing_matrix: &mut [u8],
+	) -> Result<ProjectionDecoder> {
+		let mut error = 0;
+		let ptr = unsafe {
+			ffi::opus_projection_decoder_create(
+				sample_rate as i32,
+				channels as c_int,
+				streams as c_int,
+				coupled_streams as c_int,
+				demixing_matrix.as_mut_ptr(),
+				demixing_matrix.len() as i32,
+				&mut error,
+			)
+		};
+		if error != OPUS_OK || ptr.is_null() {
+			Err(Error::from_code("opus_projection_decoder_create", error as c_int))
+		} else {
+			Ok(ProjectionDecoder { ptr, channels: channels as c_int })
+		}
+	}
+
+	/// Decode a projection Opus packet.
+	pub fn decode(&mut self, input: &[u8], output: &mut [i16], fec: bool) -> Result<usize> {
+		let ptr = match input.len() {
+			0 => std::ptr::null(),
+			_ => input.as_ptr(),
+		};
+		let len = ffi!(
+			opus_projection_decode,
+			self.ptr,
+			ptr,
+			len(input),
+			output.as_mut_ptr(),
+			len(output) / self.channels,
+			fec as c_int
+		);
+		Ok(len as usize)
+	}
+
+	/// Decode a projection Opus packet with floating point output.
+	pub fn decode_float(&mut self, input: &[u8], output: &mut [f32], fec: bool) -> Result<usize> {
+		let ptr = match input.len() {
+			0 => std::ptr::null(),
+			_ => input.as_ptr(),
+		};
+		let len = ffi!(
+			opus_projection_decode_float,
+			self.ptr,
+			ptr,
+			len(input),
+			output.as_mut_ptr(),
+			len(output) / self.channels,
+			fec as c_int
+		);
+		Ok(len as usize)
+	}
+}
+
+generic_ctls!(ProjectionDecoder, opus_projection_decoder_ctl);
+decoder_ctls!(ProjectionDecoder, opus_projection_decoder_ctl);
+
+// ============================================================================
 // Error Handling
 
 /// Opus error Result alias.
@@ -1293,10 +1901,12 @@ pub struct Error {
 }
 
 impl Error {
+	#[inline]
 	fn bad_arg(what: &'static str) -> Error {
 		Error { function: what, code: ErrorCode::BadArg }
 	}
 
+	#[inline]
 	fn from_code(what: &'static str, code: c_int) -> Error {
 		Error {
 			function: what,
@@ -1335,6 +1945,7 @@ impl std::error::Error for Error {
 	}
 }
 
+#[inline]
 fn check_len(val: usize) -> c_int {
 	match c_int::try_from(val) {
 		Ok(val2) => val2,
